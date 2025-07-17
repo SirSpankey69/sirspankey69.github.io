@@ -1,0 +1,1345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>$ROTFLOOR Portal</title>
+  <style>
+    body {
+      background-color: #0b0b0b;
+      color: #00ff99;
+      font-family: monospace;
+      padding: 40px;
+    }
+    .container {
+      max-width: 800px;
+      margin: auto;
+	  text-align: center;
+	  
+    }
+	
+    .ascii-art {
+	  white-space: pre;
+  	  font-size: 12px;
+  	  color: #22ffcc;
+	  display: flex;
+  	  justify-content: center;
+    }
+	input, button, textarea {
+	font-family: monospace;
+	background: #111;
+	border: 1px solid #00ff99;
+	color: #00ff99;
+	padding: 8px;
+	margin: 8px auto;
+	width: 50%;
+	display: block;
+	}
+
+	button {
+	cursor: pointer;
+	width: 50%;
+	display: block;
+	margin: 8px auto; /* top/bottom 8px, left/right auto for centering */
+	}
+    h1, h2 {
+      margin-top: 40px;
+    }
+	.status {
+	text-align: center;
+	font-weight: bold;
+	color: #00ff99;
+	border: 1px solid #00ff99;
+	background: #111;
+	padding: 10px;
+	width: 50%;
+	margin: 10px auto;
+	}
+
+	#topStats {
+	display: flex;
+	justify-content: center;
+	gap: 20px;
+	margin-bottom: 20px;
+	}
+
+	#priceTracker,
+	#lpProgress {
+	flex: 1;
+	padding: 10px;
+	border: 1px solid #00ff99;
+	text-align: center;
+	font-size: 16px;
+	background: #111;
+	}
+
+		#lpBarContainer {
+	background: #222;
+	border: 1px solid #00ff99;
+	height: 20px;
+	margin-top: 8px;
+	position: relative;
+	}
+
+	#lpBar {
+	background: #00ff99;
+	height: 100%;
+	width: 0%;
+	transition: width 0.6s ease;
+	}
+
+
+	@keyframes pulse {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.2); opacity: 0.6; }
+  100% { transform: scale(1); opacity: 1; }
+}
+#burnEffect.pulse {
+  animation: pulse 1s ease-in-out;
+}
+.flash {
+  animation: flash 0.4s;
+}
+@keyframes flash {
+  0% { color: #ff0; }
+  100% { color: #00ff99; }
+}
+
+
+  </style>
+</head>
+<body>
+  <div class="container">
+   <div id="topStats">
+  <div id="priceTracker">Loading $ROTFLOOR price...</div>
+  <div id="lpProgress">
+    🧪 LP Goal: ...
+    <div id="lpBarContainer">
+      <div id="lpBar"></div>
+    </div>
+  </div>
+</div>
+
+    <h1>$ROTFLOOR Degen Hub</h1>
+    <div class="ascii-art">
+      <pre>
+      ______     ______     ______     ______     ______    
+     /\  ___\   /\  ___\   /\  __ \   /\  == \   /\  ___\   
+     \ \___  \  \ \ \____  \ \  __ \  \ \  __<   \ \  __\   
+      \/\_____\  \ \_____\  \ \_\ \_\  \ \_\ \_\  \ \_____\ 
+       \/_____/   \/_____/   \/_/\/_/   \/_/ /_/   \/_____/ 
+
+      🦠 RISE FROM THE ROT. MINT. MEME. MOLDDROP. 🦠
+      </pre>
+    </div>
+
+    <h2>📱 Connect</h2>
+    <button onclick="connectWallet()">Connect Wallet</button>
+    <p id="walletAddress">Not connected</p>
+    <p id="walletBalance">Balance: ...</p>
+    <button onclick="copyWallet()">Copy Wallet Address</button>
+
+    <h2>📊 Total Supply</h2>
+    <button onclick="getSupply()">Get Total Supply</button>
+    <p id="supply">...</p>
+
+	<h2>🧬 Mint ROTFLOOR</h2>
+	<input type="number" id="mintAmount" placeholder="ETH to spend" />
+	<button onclick="mint()">Mint</button>
+	<div id="mintStatus" class="status"></div>
+
+	<div id="ethRaised" class="status">💰 ETH Raised: ...</div>
+	<div id="rotLeft" class="status">🧬 ROTFLOOR in Minter: ...</div>
+
+
+    <h2>🔥 Molddrop</h2>
+    <input type="number" id="rotAmount" placeholder="Amount to rot (in full tokens)" />
+    <button onclick="rot()">ROT</button>
+	<div id="burnEffect" style="display:none; font-size: 48px; text-align:center; margin-top:20px;">💥 Burned!</div>
+
+
+<div id="airdropLocked" style="color:#f00; display:none;"></div>
+
+<div id="airdropSection" style="display:none;">
+  <textarea id="airdropAddresses" rows="3" placeholder="Comma-separated addresses..."></textarea>
+  <textarea id="airdropAmounts" rows="3" placeholder="Comma-separated amounts..."></textarea>
+  <button onclick="airdrop()">Run Airdrop</button>
+  <div id="airdropStatus" class="status"></div>
+
+</div>
+
+
+
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.8.1/dist/ethers.umd.min.js"></script>
+  <script>
+    const CONTRACT_ADDRESS = "0xC469501DBEdE5Ba18d7f692e86bf11C169EECA60";
+	const MINTER_ADDRESS = "0x2CCCb09AF0ed9F64704175c6D05A415EFe67b703";
+        const ABI = [
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "initialOwner",
+				"type": "address"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "constructor"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "spender",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "allowance",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "needed",
+				"type": "uint256"
+			}
+		],
+		"name": "ERC20InsufficientAllowance",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "sender",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "balance",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "needed",
+				"type": "uint256"
+			}
+		],
+		"name": "ERC20InsufficientBalance",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "approver",
+				"type": "address"
+			}
+		],
+		"name": "ERC20InvalidApprover",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "receiver",
+				"type": "address"
+			}
+		],
+		"name": "ERC20InvalidReceiver",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "sender",
+				"type": "address"
+			}
+		],
+		"name": "ERC20InvalidSender",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "spender",
+				"type": "address"
+			}
+		],
+		"name": "ERC20InvalidSpender",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "owner",
+				"type": "address"
+			}
+		],
+		"name": "OwnableInvalidOwner",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "account",
+				"type": "address"
+			}
+		],
+		"name": "OwnableUnauthorizedAccount",
+		"type": "error"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "count",
+				"type": "uint256"
+			}
+		],
+		"name": "AirdropExecuted",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "owner",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "spender",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "value",
+				"type": "uint256"
+			}
+		],
+		"name": "Approval",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "by",
+				"type": "address"
+			}
+		],
+		"name": "ContractPaused",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "by",
+				"type": "address"
+			}
+		],
+		"name": "ContractUnpaused",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "previousOwner",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "newOwner",
+				"type": "address"
+			}
+		],
+		"name": "OwnershipTransferStarted",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "previousOwner",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "newOwner",
+				"type": "address"
+			}
+		],
+		"name": "OwnershipTransferred",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "account",
+				"type": "address"
+			}
+		],
+		"name": "Paused",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "burner",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			}
+		],
+		"name": "RotEvent",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "from",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "to",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "value",
+				"type": "uint256"
+			}
+		],
+		"name": "Transfer",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "account",
+				"type": "address"
+			}
+		],
+		"name": "Unpaused",
+		"type": "event"
+	},
+	{
+		"inputs": [],
+		"name": "MAX_SUPPLY",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "acceptOwnership",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address[]",
+				"name": "recipients",
+				"type": "address[]"
+			},
+			{
+				"internalType": "uint256[]",
+				"name": "amounts",
+				"type": "uint256[]"
+			}
+		],
+		"name": "airdrop",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "owner",
+				"type": "address"
+			},
+			{
+				"internalType": "address",
+				"name": "spender",
+				"type": "address"
+			}
+		],
+		"name": "allowance",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "spender",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "value",
+				"type": "uint256"
+			}
+		],
+		"name": "approve",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "account",
+				"type": "address"
+			}
+		],
+		"name": "balanceOf",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "value",
+				"type": "uint256"
+			}
+		],
+		"name": "burn",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "account",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "value",
+				"type": "uint256"
+			}
+		],
+		"name": "burnFrom",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "decimals",
+		"outputs": [
+			{
+				"internalType": "uint8",
+				"name": "",
+				"type": "uint8"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "name",
+		"outputs": [
+			{
+				"internalType": "string",
+				"name": "",
+				"type": "string"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "owner",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "pause",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "paused",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "pendingOwner",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "renounceOwnership",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			}
+		],
+		"name": "rot",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "symbol",
+		"outputs": [
+			{
+				"internalType": "string",
+				"name": "",
+				"type": "string"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "totalSupply",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "to",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "value",
+				"type": "uint256"
+			}
+		],
+		"name": "transfer",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "from",
+				"type": "address"
+			},
+			{
+				"internalType": "address",
+				"name": "to",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "value",
+				"type": "uint256"
+			}
+		],
+		"name": "transferFrom",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "newOwner",
+				"type": "address"
+			}
+		],
+		"name": "transferOwnership",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "unpause",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	}
+];
+    	const MINTER_ABI = [
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "_tokenAddress",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_initialRate",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "constructor"
+	},
+	{
+		"inputs": [],
+		"name": "InsufficientTokenBalance",
+		"type": "error"
+	},
+	{
+		"inputs": [],
+		"name": "InvalidToken",
+		"type": "error"
+	},
+	{
+		"inputs": [],
+		"name": "mint",
+		"outputs": [],
+		"stateMutability": "payable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "NothingToWithdraw",
+		"type": "error"
+	},
+	{
+		"inputs": [],
+		"name": "OverflowDetected",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "owner",
+				"type": "address"
+			}
+		],
+		"name": "OwnableInvalidOwner",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "account",
+				"type": "address"
+			}
+		],
+		"name": "OwnableUnauthorizedAccount",
+		"type": "error"
+	},
+	{
+		"inputs": [],
+		"name": "RateMustBePositive",
+		"type": "error"
+	},
+	{
+		"inputs": [],
+		"name": "renounceOwnership",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "token",
+				"type": "address"
+			}
+		],
+		"name": "SafeERC20FailedOperation",
+		"type": "error"
+	},
+	{
+		"inputs": [],
+		"name": "SendETHToMint",
+		"type": "error"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "user",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "ethIn",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "tokensOut",
+				"type": "uint256"
+			}
+		],
+		"name": "Minted",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "previousOwner",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "newOwner",
+				"type": "address"
+			}
+		],
+		"name": "OwnershipTransferred",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "newRate",
+				"type": "uint256"
+			}
+		],
+		"name": "RateChanged",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "newRate",
+				"type": "uint256"
+			}
+		],
+		"name": "setRate",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "to",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			}
+		],
+		"name": "TokensWithdrawn",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "newOwner",
+				"type": "address"
+			}
+		],
+		"name": "transferOwnership",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address payable",
+				"name": "to",
+				"type": "address"
+			}
+		],
+		"name": "withdrawETH",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "to",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			}
+		],
+		"name": "Withdrawn",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "to",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "amt",
+				"type": "uint256"
+			}
+		],
+		"name": "withdrawTokens",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "owner",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "rate",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "rotToken",
+		"outputs": [
+			{
+				"internalType": "contract IERC20",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	}
+]
+
+
+	let provider, signer, contract;
+
+	let rotToken;
+
+	async function updateMintStats() {
+  const ethBalance = await provider.getBalance(MINTER_ADDRESS);
+  const rotBalance = await contract.balanceOf(MINTER_ADDRESS); // ← make sure this uses 'contract'
+
+  // Update LP progress bar
+  const raised = parseFloat(ethers.formatEther(ethBalance));
+  const goal = 0.1;
+  const progress = Math.min((raised / goal) * 100, 100).toFixed(2);
+  document.getElementById("lpProgress").innerHTML =
+    `🧪 LP Goal: ${raised.toFixed(3)} / ${goal} ETH
+    <div id="lpBarContainer"><div id="lpBar" style="width: ${progress}%"></div></div>`;
+
+  document.getElementById("ethRaised").innerText =
+    `💰 ETH Raised: ${raised.toFixed(4)} ETH`;
+
+  document.getElementById("rotLeft").innerText =
+    `🧬 ROTFLOOR in Minter: ${ethers.formatEther(rotBalance)} ROTFLOOR`;
+}
+
+
+	async function connectWallet() {
+	console.log("🧪 connectWallet() triggered");
+	if (!window.ethereum) return alert("MetaMask not detected");
+
+	provider = new ethers.BrowserProvider(window.ethereum);
+	const accounts = await provider.send("eth_requestAccounts", []);
+	signer = await provider.getSigner();
+	window.minterContract = new ethers.Contract(MINTER_ADDRESS, MINTER_ABI, signer);
+	contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+	window.contract = contract;
+
+	const address = accounts[0];
+	document.getElementById("walletAddress").innerText = address;
+
+	try {
+		const balance = await contract.balanceOf(address);
+		document.getElementById("walletBalance").innerText =
+		`Balance: ${ethers.formatEther(balance)} $ROTFLOOR`;
+	} catch (e) {
+		console.warn("Couldn't fetch balance:", e.message);
+	}
+
+	const network = await provider.getNetwork();
+	console.log("🛰 Network chainId:", network.chainId);
+
+	// Always enable buttons for now
+	document.getElementById("rotAmount").disabled = false;
+	document.querySelector("button[onclick='rot()']").disabled = false;
+
+	if (Number(network.chainId) !== 1) {
+		alert("⚠ You are not connected to Ethereum Mainnet.");
+		document.getElementById("supply").innerText = "Disabled on testnet";
+	}
+
+	// ✅ OWNER CHECKS – Always run
+	try {
+		const contractOwner = await contract.owner();
+		console.log("👑 Contract owner:", contractOwner);
+		console.log("👤 Connected wallet:", address);
+		const isOwner = contractOwner.toLowerCase() === address.toLowerCase();
+		console.log("🔍 Is owner?", isOwner);
+		document.getElementById("airdropSection").style.display = isOwner ? "block" : "none";
+		document.getElementById("airdropLocked").style.display = isOwner ? "none" : "block";
+	} catch (err) {
+		console.warn("Could not verify owner:", err.message);
+		document.getElementById("airdropSection").style.display = "none";
+		document.getElementById("airdropLocked").style.display = "block";
+	}
+	}
+
+
+
+  async function getSupply() {
+    try {
+      const supply = await contract.totalSupply();
+      document.getElementById("supply").innerText = ethers.formatEther(supply);
+    } catch (err) {
+      console.error("Error getting supply:", err);
+      document.getElementById("supply").innerText = "Failed to load supply.";
+    }
+  }
+
+  async function rot() {
+    const amtInput = document.getElementById("rotAmount");
+    const amt = amtInput.value;
+    const btn = document.querySelector("button[onclick='rot()']");
+    if (!amt || isNaN(amt) || parseFloat(amt) <= 0) {
+      alert("Please enter a valid token amount to rot.");
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerText = "🔥 Rotting...";
+    try {
+      const parsed = ethers.parseEther(amt);
+      const tx = await contract.rot(parsed);
+      await tx.wait();
+
+      showBurnAnimation();
+
+      updateLeaderboard(amt);
+      btn.innerText = "✅ Rotted!";
+      const link = `https://sepolia.etherscan.io/tx/${tx.hash}`;
+      alert(`Rot complete!\n\nView on Etherscan:\n${link}`);
+    } catch (e) {
+      alert("Error during rot: " + e.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerText = "ROT";
+    }
+  }
+
+  function showBurnAnimation() {
+  const anim = document.createElement("div");
+  anim.innerText = "💥 ROT COMPLETE!";
+  anim.style.position = "fixed";
+  anim.style.top = "40%";
+  anim.style.left = "50%";
+  anim.style.transform = "translate(-50%, -50%) scale(1)";
+  anim.style.fontSize = "40px";
+  anim.style.color = "#ff00cc";
+  anim.style.fontWeight = "bold";
+  anim.style.animation = "popFade 3s ease-out forwards";
+  document.body.appendChild(anim);
+
+  setTimeout(() => anim.remove(), 3000);
+}
+
+
+  function updateLeaderboard(amount) {
+    const addr = document.getElementById("walletAddress").innerText;
+    const leaderboard = JSON.parse(localStorage.getItem("rotLeaderboard") || "[]");
+
+    const existing = leaderboard.find(r => r.addr === addr);
+    if (existing) {
+      existing.amt += parseFloat(amount);
+    } else {
+      leaderboard.push({ addr, amt: parseFloat(amount) });
+    }
+
+    leaderboard.sort((a, b) => b.amt - a.amt);
+    localStorage.setItem("rotLeaderboard", JSON.stringify(leaderboard));
+    renderLeaderboard();
+  }
+
+  function renderLeaderboard() {
+    const el = document.getElementById("leaderboard");
+    if (!el) return;
+    const leaderboard = JSON.parse(localStorage.getItem("rotLeaderboard") || "[]");
+    const html = leaderboard.slice(0, 5).map((r, i) =>
+      `${i + 1}. ${r.addr.slice(0, 6)}… – ${r.amt.toFixed(2)} ROT`
+    ).join("<br>");
+    el.innerHTML = html || "Nobody has rotted yet 👀";
+  }
+
+  function copyWallet() {
+    const addr = document.getElementById("walletAddress")?.innerText;
+    if (!addr || addr === "Not connected") return alert("⚠ No wallet connected.");
+    navigator.clipboard.writeText(addr)
+      .then(() => alert("📋 Wallet address copied to clipboard!"))
+      .catch(() => alert("❌ Failed to copy address."));
+  }
+
+  async function priceTracker() {
+    try {
+      const res = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd");
+      const data = await res.json();
+      const price = data.ethereum.usd;
+      document.getElementById("priceTracker").innerText =
+        `💸 ETH: $${price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    } catch (e) {
+      console.error("Price fetch error:", e);
+      document.getElementById("priceTracker").innerText = "💸 ETH price unavailable";
+    }
+  }
+
+  window.addEventListener("DOMContentLoaded", () => {
+    priceTracker();
+    setInterval(priceTracker, 30000);
+    renderLeaderboard();
+  });
+
+  async function airdrop() {
+  const addrsRaw = document.getElementById("airdropAddresses").value;
+  const amtsRaw = document.getElementById("airdropAmounts").value;
+  const addrs = addrsRaw.split(",").map(a => a.trim());
+  const amts = amtsRaw.split(",").map(a => a.trim());
+
+  const statusEl = document.getElementById("airdropStatus");
+
+  if (addrs.length !== amts.length) {
+    return alert("⚠ Address and amount count must match.");
+  }
+
+  const parsedAmts = [];
+  for (let i = 0; i < amts.length; i++) {
+    const val = amts[i];
+    if (isNaN(val) || Number(val) <= 0) {
+      return alert(`🚫 Invalid amount at line ${i + 1}: "${val}"`);
+    }
+    if (Number(val) > 500000000) {
+      return alert(`🚫 Amount too high at line ${i + 1}. Max is 100,000,000`);
+    }
+    parsedAmts.push(ethers.parseEther(val));
+  }
+
+  try {
+    statusEl.innerText = "Sending airdrop transaction...";
+    const tx = await window.contract.airdrop(addrs, parsedAmts);
+    await tx.wait();
+    statusEl.innerText = `✅ Airdrop successful! TX: ${tx.hash}`;
+  } catch (err) {
+    console.error(err);
+    statusEl.innerText = `❌ Airdrop failed: ${err.message}`;
+  }
+}
+	async function mint() {
+	const eth = document.getElementById("mintAmount").value;
+	const status = document.getElementById("mintStatus");
+	if (!eth || isNaN(eth) || eth <= 0) {
+		return alert("Enter a valid ETH amount.");
+	}
+
+	try {
+		status.innerText = "Minting in progress...";
+		const tx = await window.minterContract.mint({
+		value: ethers.parseEther(eth)
+		});
+		await tx.wait();
+		status.innerText = `✅ Mint complete! TX: ${tx.hash}`;
+	} catch (e) {
+		console.error(e);
+		status.innerText = `❌ Mint failed: ${e.message}`;
+		await updateMintStats();
+
+	}
+	}
+
+
+  // 💫 Animations
+  const style = document.createElement("style");
+  style.innerHTML = `
+    @keyframes popFade {
+      0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+      100% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
+    }
+  `;
+  window.addEventListener("DOMContentLoaded", () => {
+  priceTracker();
+  renderLeaderboard();
+  updateMintStats(); // Run once
+  setInterval(updateMintStats, 5000); // Auto-refresh every 30s
+  
+});
+
+  document.head.appendChild(style);
+</script>
